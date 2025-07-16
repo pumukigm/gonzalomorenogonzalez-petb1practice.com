@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Asistente Speaking: Por GMG</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f2f5;
+      text-align: center;
+      padding: 20px;
+    }
+    #avatar-container {
+      position: relative;
+      width: 300px;
+      margin: 0 auto;
+    }
+    #avatar {
+      width: 100%;
+      border-radius: 10px;
+    }
+    #mouth {
+      position: absolute;
+      bottom: 50px;
+      left: 50%;
+      width: 60px;
+      height: 30px;
+      background: #d33;
+      border-radius: 40px / 50px;
+      transform: translateX(-50%);
+      opacity: 0.8;
+      display: none;
+    }
+    #mouth.talking {
+      animation: mouthMove 0.3s infinite;
+      display: block;
+    }
+    @keyframes mouthMove {
+      0%, 100% { height: 30px; }
+      50% { height: 50px; }
+    }
+    #subtitles {
+      margin: 20px auto;
+      font-size: 1.1em;
+      padding: 10px;
+      max-width: 500px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 0 5px #aaa;
+    }
+    button, input[type="file"] {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+    }
+    input[type="text"] {
+      padding: 8px;
+      width: 300px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>🤖 Tu Asistente Virtual</h2>
+
+  <input type="text" id="apiKey" placeholder="Pega tu Key" /><br/>
+
+  <div id="avatar-container">
+    <img id="avatar" src="https://i.postimg.cc/8cW65RQD/Copilot-20250716-141039.png" />
+    <div id="mouth"></div>
+  </div>
+
+  <div id="subtitles">Esperando tu respuesta...</div>
+
+  <button id="muteBtn">🔊 Silenciar</button>
+  <button id="toggleSubtitlesBtn">👁️ Ocultar subtítulos</button>
+  <br>
+  <input type="file" id="imageInput" accept="image/*" />
+
+  <script>
+    const apiKeyInput = document.getElementById("apiKey");
+    const mouth = document.getElementById("mouth");
+    const subtitles = document.getElementById("subtitles");
+    const muteBtn = document.getElementById("muteBtn");
+    const toggleSubtitlesBtn = document.getElementById("toggleSubtitlesBtn");
+    const imageInput = document.getElementById("imageInput");
+
+    let isMuted = false;
+    let apiKey = "";
+    let conversation = [
+      { role: "system", content: "You are a friendly assistant who speaks English and also answers questions about images that the user uploads. Don't use ** or emojis. Just the text and what you're going to say, and always in English. No exceptions." }
+    ];
+
+    muteBtn.onclick = () => {
+      isMuted = !isMuted;
+      muteBtn.textContent = isMuted ? "🔇 Activar sonido" : "🔊 Silenciar";
+    };
+
+    toggleSubtitlesBtn.onclick = () => {
+      subtitles.style.display = subtitles.style.display === "none" ? "block" : "none";
+    };
+
+    apiKeyInput.addEventListener("change", () => {
+      apiKey = apiKeyInput.value.trim();
+    });
+
+    function animateMouth(active) {
+      if (active) mouth.classList.add("talking");
+      else mouth.classList.remove("talking");
+    }
+
+    function speak(text) {
+      if (isMuted) return;
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = "en-GB";
+      utter.onstart = () => animateMouth(true);
+      utter.onend = () => {
+        animateMouth(false);
+        listen();
+      };
+      window.speechSynthesis.speak(utter);
+    }
+
+    function listen() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return alert("Tu navegador no soporta reconocimiento de voz.");
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-GB";
+      recognition.onresult = (e) => {
+        const text = e.results[0][0].transcript;
+        subtitles.textContent = "Tú: " + text;
+        conversation.push({ role: "user", content: text });
+        sendToAI();
+      };
+      recognition.onerror = () => setTimeout(listen, 1000);
+      recognition.start();
+      subtitles.textContent = "🎤 Escuchando...";
+    }
+
+    async function sendToAI() {
+      if (!apiKey) {
+        subtitles.textContent = "❗ Añade tu API Key primero.";
+        return;
+      }
+
+      subtitles.textContent = "⏳ Pensando...";
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: conversation,
+          max_tokens: 300
+        })
+      });
+
+      const data = await response.json();
+      const reply = data.choices?.[0]?.message?.content || "Sorry, I didn't understand that.";
+      subtitles.textContent = "🤖 " + reply;
+      conversation.push({ role: "assistant", content: reply });
+      speak(reply);
+    }
+
+    imageInput.addEventListener("change", () => {
+      const file = imageInput.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64Image = reader.result.split(",")[1];
+        conversation.push({
+          role: "user",
+          content: [
+            { type: "text", text: "Describe this image in English" },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${base64Image}`
+              }
+            }
+          ]
+        });
+        subtitles.textContent = "🖼️ Imagen enviada a la IA...";
+        sendToAI();
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Empezar conversación y luego escuchar
+    window.onload = () => {
+      speak("Hello! I'm an English B1 examiner. ¡Let's start practice! Are you Pablo or Gonzalo?");
+      setTimeout(() => {
+        listen();
+      }, 3000); // da tiempo a terminar de hablar
+    };
+  </script>
+</body>
+</html>
