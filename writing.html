@@ -70,6 +70,15 @@
       border-radius: 6px;
       margin-top: 8px;
     }
+    #writing-wrapper {
+      position: relative;
+    }
+    #wordCount {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -90,13 +99,18 @@
 
   <div class="container hidden" id="writing-section">
     <div id="prompt"></div>
-    <textarea id="writing" placeholder="Escribe aquí tu texto..."></textarea>
+
+    <div id="writing-wrapper">
+      <textarea id="writing" placeholder="Escribe aquí tu texto..." oninput="updateWordCount()"></textarea>
+      <div id="wordCount">PALABRAS: 0</div>
+    </div>
+
     <button onclick="submitWriting()">📤 Entregar</button>
     <div id="feedback"></div>
   </div>
 
   <script>
-    let apiKey = "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"; // clave inicial (puedes dejarla vacía si prefieres forzar introducción)
+    let apiKey = "";
     const model = "google/gemini-2.5-flash";
     let selectedPart = null;
 
@@ -235,6 +249,23 @@ ${userText}`;
 
       } catch (error) {
         feedbackDiv.innerText = "❌ Error al conectar con OpenRouter:\n" + error.message;
+      }
+    }
+
+    function updateWordCount() {
+      const text = document.getElementById("writing").value;
+      const wordCountDiv = document.getElementById("wordCount");
+      const words = text.trim().split(/\s+/).filter(word => word.length > 0);
+      const count = words.length;
+      wordCountDiv.textContent = "PALABRAS: " + count;
+
+      // Colores
+      if (count < 85 || count > 110) {
+        wordCountDiv.style.color = "red";
+      } else if ((count >= 85 && count <= 93) || (count >= 106 && count <= 110)) {
+        wordCountDiv.style.color = "orange";
+      } else {
+        wordCountDiv.style.color = "green";
       }
     }
   </script>
